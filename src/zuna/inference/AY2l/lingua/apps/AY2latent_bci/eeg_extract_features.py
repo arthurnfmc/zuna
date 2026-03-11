@@ -32,6 +32,15 @@ from apps.AY2latent_bci.eeg_data import (
 from apps.AY2latent_bci.transformer import DecoderTransformerArgs, EncoderDecoder
 
 
+def _as_bool(value) -> bool:
+    """Parse bool values from OmegaConf/CLI inputs."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
 def _parse_config() -> dict:
     cli_cfg = OmegaConf.from_cli()
     if "config" not in cli_cfg:
@@ -115,7 +124,7 @@ def main() -> None:
     data_args = dataclass_from_dict(BCIDatasetArgs, cfg["data"])
     seed = int(cfg.get("seed", 42))
     pooling = str(cfg.get("feature_pooling", "mean"))
-    save_token_embeddings = bool(cfg.get("save_token_embeddings", False))
+    save_token_embeddings = _as_bool(cfg.get("save_token_embeddings", False))
 
     valid_pooling = {"mean", "max", "mean_max_concat"}
     if pooling not in valid_pooling:
@@ -162,10 +171,13 @@ def main() -> None:
             }
 
             tok_idx = _build_tok_idx(batch, model_args.tok_idx_type, model_args.rope_dim)
-            do_idx = (batch["encoder_input"].sum(axis=2) == 0).squeeze(0)
+
+            # Keep shape handling aligned with inference path: [seq_len, dim] -> [1, seq_len, dim].
+            encoder_input = batch["encoder_input"].unsqueeze(0)
+            do_idx = (encoder_input.sum(dim=2) == 0).squeeze(0)
 
             enc_out, _ = model.encoder(
-                token_values=batch["encoder_input"].unsqueeze(0),
+                token_values=encoder_input,
                 seq_lens=batch["seq_lens"],
                 tok_idx=tok_idx,
                 do_idx=do_idx,
