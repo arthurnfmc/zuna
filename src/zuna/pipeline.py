@@ -86,6 +86,70 @@ def inference(
     print(f"✓ Inference complete")
 
 
+def extract_features(
+    input_dir: str,
+    output_dir: str,
+    gpu_device: int | str = 0,
+    tokens_per_batch: int | None = None,
+    data_norm: float | None = None,
+    pooling: str = "mean",
+    save_token_embeddings: bool = False,
+) -> None:
+    """
+    Run ZUNA encoder as a feature extractor on preprocessed .pt files.
+
+    This extracts latent representations from the encoder without running
+    diffusion sampling. Output files are written as one .pt per sample and
+    include a pooled embedding vector plus optional token-level embeddings.
+
+    Args:
+        input_dir: Directory containing preprocessed .pt files
+        output_dir: Directory to save extracted feature .pt files
+        gpu_device: GPU device ID (default: 0), or "" for CPU
+        tokens_per_batch: Number of tokens per batch (larger = better GPU usage)
+        data_norm: Data normalization denominator (ZUNA expects std~=0.1)
+        pooling: Pooling strategy for sample embedding.
+                 Options: "mean", "max", "mean_max_concat"
+        save_token_embeddings: If True, save full token-level encoder outputs
+                               in addition to pooled embeddings.
+    """
+    import subprocess
+
+    valid_pooling = {"mean", "max", "mean_max_concat"}
+    if pooling not in valid_pooling:
+        raise ValueError(f"Invalid pooling='{pooling}'. Use one of {sorted(valid_pooling)}")
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    config_path = Path(__file__).parent / "inference/AY2l/lingua/apps/AY2latent_bci/configs/config_infer.yaml"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found at {config_path}")
+
+    feature_script = Path(__file__).parent / "inference/AY2l/lingua/apps/AY2latent_bci/eeg_extract_features.py"
+
+    cmd = [
+        "python3",
+        str(feature_script),
+        f"config={config_path}",
+        f"data.data_dir={str(Path(input_dir).absolute())}",
+        f"data.export_dir={str(output_path.absolute())}",
+        f"feature_pooling={pooling}",
+        f"save_token_embeddings={str(save_token_embeddings)}",
+    ]
+
+    if tokens_per_batch is not None:
+        cmd.append(f"data.target_packed_seqlen={tokens_per_batch}")
+    if data_norm is not None:
+        cmd.append(f"data.data_norm={data_norm}")
+
+    env = os.environ.copy()
+    env["CUDA_VISIBLE_DEVICES"] = str(gpu_device)
+
+    subprocess.run(cmd, env=env, check=True)
+    print(f"✓ Feature extraction complete")
+
+
 def pt_to_fif(
     input_dir: str,
     output_dir: str,

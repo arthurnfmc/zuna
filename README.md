@@ -77,6 +77,7 @@ For detailed documentation on any function, use `help()`:
 import zuna
 help(zuna.preprocessing)
 help(zuna.inference)
+help(zuna.extract_features)
 help(zuna.pt_to_fif)
 help(zuna.compare_plot_pipeline)
 ```
@@ -121,6 +122,31 @@ inference(
     inference_figures_dir="./FIGURES", # Where to save per-sample plots
 )
 ```
+
+## Feature Extraction
+
+Use ZUNA as an encoder-only feature extractor (no diffusion sampling). This is useful for downstream tasks like classification, clustering, retrieval, and transfer learning.
+
+```python
+from zuna import extract_features
+
+extract_features(
+    input_dir="path/to/working/2_pt_input",
+    output_dir="path/to/working/features",
+    gpu_device=0,                      # GPU ID, or "" for CPU
+    tokens_per_batch=100000,
+    data_norm=10.0,
+    pooling="mean",                   # "mean", "max", "mean_max_concat"
+    save_token_embeddings=False,       # True to save full [seq_len, dim] encoder outputs
+)
+```
+
+Each output file contains:
+
+- `pooled_feature`: sample-level embedding vector
+- `token_features`: token-level encoder output (optional)
+- `metadata`: original sample metadata
+- `source_filename` and `sample_idx`: provenance fields
 
 ## Reconstruction
 
